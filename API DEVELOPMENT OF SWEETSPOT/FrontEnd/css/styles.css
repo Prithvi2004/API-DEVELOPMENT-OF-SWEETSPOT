@@ -1,0 +1,17 @@
+/* Custom styles for SweetSpot */
+body {
+  font-family: "Open Sans", sans-serif;
+}
+
+.stButton button {
+  background-color: #f76c6c;
+  border-radius: 10px;
+  color: white;
+}
+
+.stButton button:hover {
+  background-color: #ff4b4b;
+  color: white;
+}
+
+/* Additional styles can be added here */

@@ -1,0 +1,20 @@
+-- SELECT * FROM sweetspot_app_cake;
+-- SELECT * FROM sweetspot_app_customer;
+-- SELECT * FROM sweetspot_app_cakecustomization;
+-- SELECT * FROM sweetspot_app_cart;
+-- SELECT * FROM sweetspot_app_cartitem;
+-- SELECT * FROM sweetspot_app_order;
+-- SELECT * FROM sweetspot_app_order_items;
+
+
+
+
+
+-- TRUNCATE TABLE sweetspot_app_cakecustomization, sweetspot_app_customer, sweetspot_app_cart, sweetspot_app_cartitem, sweetspot_app_order, sweetspot_app_order_items RESTART IDENTITY CASCADE;
+
+
+
+-- INSERT INTO sweetspot_app_cake (id, name, flavour, size, price, description, image, available, created_at) VALUES
+-- (1, 'Chocolate Heaven', 'Chocolate', 'Large', 25.50, 'A rich and moist chocolate cake', 'chocolate_heaven.jpg', true, '2024-10-23 12:30:00'),
+-- (2, 'Vanilla Dream', 'Vanilla', 'Medium', 20.00, 'A light and fluffy vanilla cake', 'vanilla_dream.jpg', true, '2024-10-23 12:30:00'),
+-- (3, 'Strawberry Delight', 'Strawberry', 'Small', 18.00, 'A fresh and fruity strawberry cake', 'strawberry_delight.jpg', false, '2024-10-23 12:30:00');

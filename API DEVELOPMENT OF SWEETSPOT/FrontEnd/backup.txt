@@ -1,0 +1,354 @@
+streamlit_app.py for orders
+
+import streamlit as st
+import requests
+
+# Django API base URL
+API_BASE_URL = "http://127.0.0.1:8000"  # Replace with your Django backend URL
+
+# Function to place an order
+def place_order(customer_id, payment_method, card_details):
+    order_url = f"{API_BASE_URL}/orders/place_order/"
+    data = {
+        "customer_id": customer_id,
+        "payment_method": payment_method,
+        **card_details
+    }
+    response = requests.post(order_url, data=data)
+    return response.json()
+
+# Function to update payment details
+def update_payment(order_id, payment_status, payment_method):
+    update_url = f"{API_BASE_URL}/orders/{order_id}/update_payment/"
+    data = {
+        "payment_status": payment_status,
+        "payment_method": payment_method
+    }
+    response = requests.patch(update_url, data=data)
+    return response.json()
+
+# Streamlit Frontend
+
+st.title("SweetSpot - Order Your Cake Online")
+
+# Customer information
+st.header("Customer Information")
+customer_id = st.text_input("Customer ID")
+
+# Payment method selection
+st.header("Payment Method")
+payment_method = st.selectbox("Choose a payment method", ["cod", "card"])
+
+# If the user chooses 'card', show card details fields
+if payment_method == 'card':
+    st.subheader("Card Details")
+    card_holder_name = st.text_input("Card Holder Name")
+    card_number = st.text_input("Card Number")
+    cvv = st.text_input("CVV")
+    expiration_date = st.date_input("Expiration Date")
+
+    # Combine card details in a dictionary
+    card_details = {
+        "card_holder_name": card_holder_name,
+        "card_number": card_number,
+        "cvv": cvv,
+        "expiration_date": expiration_date
+    }
+else:
+    card_details = {}
+
+# Place order button
+if st.button("Place Order"):
+    if customer_id:
+        response = place_order(customer_id, payment_method, card_details)
+        st.write(response)
+    else:
+        st.error("Please provide a Customer ID")
+
+# Update payment status
+st.header("Update Payment")
+order_id = st.text_input("Order ID")
+payment_status = st.selectbox("Payment Status", ["pending", "completed"])
+
+if st.button("Update Payment"):
+    if order_id:
+        response = update_payment(order_id, payment_status, payment_method)
+        st.write(response)
+    else:
+        st.error("Please provide an Order ID")
+
+----------------------------------------------------------------------------------------------
+
+dashboard.py
+
+
+import streamlit as st  # type: ignore
+import requests
+import psycopg2
+
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="SweetSpot - Dashboard", page_icon="🍰", layout="wide")
+
+# --- SESSION CHECK ---
+if 'user_info' not in st.session_state or st.session_state.user_info is None:
+    st.warning("Please log in to access the dashboard.")
+    st.stop()
+
+# --- DATABASE CONNECTION ---
+def get_db_connection():
+    conn = psycopg2.connect(
+        dbname='sweetspotdb',
+        user='postgres',
+        password='postgres',
+        host='127.0.0.1',
+        port='5432'
+    )
+    return conn
+
+def get_customer_id(email):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM sweetspot_app_customer WHERE email = %s", (email,))
+    customer_id = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return customer_id[0] if customer_id else None
+
+# --- DASHBOARD PAGE ---
+st.title("Dashboard")
+
+user_first_name = st.session_state.user_info.get('first_name', 'User') 
+st.subheader(f"Welcome, {user_first_name}!")
+
+# --- Custom CSS Styling ---
+def load_custom_css():
+    st.markdown("""
+    <style>
+        /* Styling for cake cards */
+        .cake-card {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px;
+            width: 250px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* Hover effect */
+        .cake-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Styling for cake image */
+        .cake-image {
+            border-radius: 10px;
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            margin-bottom: 15px;
+        }
+
+        /* Styling for cake name */
+        .cake-name {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #f76c6c;
+            margin-bottom: 5px;
+        }
+
+        /* Price styling */
+        .cake-price {
+            font-size: 1rem;
+            color: #333333;
+            margin-bottom: 10px;
+        }
+
+        /* Description */
+        .cake-description {
+            font-size: 0.9rem;
+            color: #666666;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Load custom CSS for advanced styling
+load_custom_css()
+
+# Fetch customer ID using the email from session state
+customer_email = st.session_state.user_info['email']
+customer_id = get_customer_id(customer_email)
+
+# --- Function to Fetch or Create Cart ---
+def get_cart(customer_id):
+    url = f"http://127.0.0.1:8000/api/carts/"
+    response = requests.get(url, params={"customer": customer_id})
+
+    if response.status_code == 200:
+        carts = response.json()  # This is a list of carts
+        if carts:  # Check if there are any carts
+            return carts[0]  # Return the first cart
+        else:
+            return None
+    else:
+        st.error(f"Failed to fetch cart information: {response.json()}")
+        return None
+
+# --- Function to Add Item to Cart ---
+def add_item_to_cart(cart_id, cake_id, quantity, customization):
+    url = f"http://127.0.0.1:8000/api/carts/{cart_id}/add_item/"
+    response = requests.post(url, json={
+        "cake_id": cake_id,
+        "quantity": quantity,
+        "customization": customization
+    })
+    if response.status_code == 200:
+        return True
+    else:
+        st.error(f"Error {response.status_code}: {response.text}")
+        return False
+
+# --- Function to Fetch Available Cakes ---
+def get_available_cakes():
+    url = "http://127.0.0.1:8000/api/cakes/"  # Django API endpoint for cakes
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        return response.json()  # Assuming the API returns a list of cakes
+    else:
+        st.error(f"Failed to fetch cakes: {response.text}")
+        return []
+
+# --- Function to Place Order ---
+def place_order(order_data):
+    url = "http://127.0.0.1:8000/api/orders/place_order/"
+    response = requests.post(url, json=order_data)
+    
+    if response.status_code == 201:
+        return response.json()  # Return the created order details
+    else:
+        st.error(f"Failed to place order: {response.text}")
+        return None
+
+# --- Initialize Cart ---
+cart = get_cart(customer_id)
+
+if cart is None:
+    st.warning("No cart found. You can create a cart below.")
+else:
+    st.success("Cart found!")
+
+# --- Create Cart Button ---
+if st.button("Create Cart"):
+    if cart is None:  # Only create a cart if one does not already exist
+        create_cart_url = "http://127.0.0.1:8000/api/carts/"
+        response = requests.post(create_cart_url, json={"customer": customer_id})
+        if response.status_code == 201:
+            cart = response.json()  # Update the cart variable
+            st.success("Cart created successfully!")
+        else:
+            st.error(f"Failed to create cart: {response.json()}")
+    else:
+        st.warning("A cart already exists for this customer!")
+
+# --- Toggle Visibility for Cakes ---
+if 'show_cakes' not in st.session_state:
+    st.session_state.show_cakes = False
+
+# --- Display Cakes Button ---
+if st.button("Show Available Cakes"):
+    st.session_state.show_cakes = True
+
+if st.button("Hide Cakes"):
+    st.session_state.show_cakes = False
+
+# --- Display Cakes if the flag is set ---
+if st.session_state.show_cakes:
+    cakes = get_available_cakes()
+    
+    if cakes:
+        st.write("Here are the available cakes:")
+
+        # Loop through cakes and create side-by-side columns layout
+        cols = st.columns(3)  # Display 3 cakes per row
+        for i, cake in enumerate(cakes):
+            col = cols[i % 3]  # Arrange cakes in columns
+            with col:
+                st.markdown(f"""
+                <div class="cake-card">
+                    <img src="{cake['image']}" alt="{cake['name']}" class="cake-image" />
+                    <div class="cake-name">{cake['name']}</div>
+                    <div class="cake-price">Price: ${cake['price']}</div>
+                    <div class="cake-description">Flavor: {cake['flavour']}</div>
+                    <div class="cake-description">Size: {cake['size']}</div>
+                    <div class="cake-description">Available: {'✅' if cake['available'] else '❌'}</div>
+                    <div class="cake-description">{cake['description']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Input fields for adding to cart
+                quantity = st.number_input("Quantity", min_value=1, max_value=10, value=1, key=f"quantity_{cake['id']}")
+                customization = {
+                    "message": st.text_input("Customization Message", key=f"message_{cake['id']}"),
+                    "egg_version": st.checkbox("Egg Version", value=True, key=f"egg_{cake['id']}"),
+                    "toppings": st.text_input("Toppings", key=f"toppings_{cake['id']}"),
+                    "shape": st.selectbox("Shape", options=["Round", "Square", "Heart"], index=0, key=f"shape_{cake['id']}")
+                }
+
+                if st.button(f"Add {cake['name']} to Cart", key=f"add_{cake['id']}"):
+                    if add_item_to_cart(cart['id'], cake['id'], quantity, customization):
+                        st.success(f"{cake['name']} added to cart!")
+                    else:
+                        st.error("Failed to add item to cart.")
+
+    else:
+        st.warning("No cakes are available at the moment.")
+
+# --- Display Cart ---
+if st.button("View Cart"):
+    if cart and 'items' in cart:  # Check if cart exists and has items
+        if cart['items']:
+            st.write("Your Cart:")
+            for item in cart['items']:
+                st.write(f"Item: {item['cake']}, Quantity: {item['quantity']}, Subtotal: ${item['subtotal']}")
+            st.write(f"Total Amount: ${cart['total_amount']}")
+        else:
+            st.warning("Your cart is empty.")
+    else:
+        st.warning("No cart found.")
+
+# --- Separate Place Order Section ---
+if cart and 'items' in cart and cart['items']:
+    st.subheader("Payment Information")
+    payment_method = st.selectbox("Select Payment Method", ["card", "cash"])
+
+    # Payment details fields
+    card_number = st.text_input("Card Number", type="password", placeholder="Enter card number")
+    card_holder_name = st.text_input("Card Holder Name", placeholder="Enter card holder name")
+    expiration_date = st.date_input("Expiration Date")
+    cvv = st.text_input("CVV", type="password", placeholder="Enter CVV")
+
+    if st.button("Place Order"):
+        order_data = {
+            "customer_id": customer_id,
+            "cart_id": cart['id'],
+            "payment_method": payment_method,
+            "card_details": {
+                "card_number": card_number,
+                "card_holder_name": card_holder_name,
+                "expiration_date": expiration_date.isoformat(),  # Convert date to string format
+                "cvv": cvv
+            }
+        }
+        order_response = place_order(order_data)
+        if order_response:
+            st.balloons()  # Show balloons on successful order
+            st.success("Order placed successfully!")
+            st.write("Order Details:", order_response)
+        else:
+            st.error("Failed to place order.")
+else:
+    st.warning("Your cart is empty, unable to place order.")
